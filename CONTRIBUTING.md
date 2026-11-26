@@ -1,0 +1,101 @@
+# Working on voiceDraw
+
+## Build and test
+
+```sh
+npm install
+npm run build        # dist/cli.js and the player page in dist/player
+npm test
+node dist/cli.js render examples/dns.voicedraw.json
+```
+
+The layout is by responsibility:
+
+- `src/player` runs in the browser and turns a script into frames.
+- `src/voice` is the speech pipeline.
+- `src/format/check.ts` is the checker.
+- `src/math` typesets formulas.
+- `src/render` drives the browser and ffmpeg.
+
+`docs/format.md` is the text that `voicedraw guide` prints, so a change to the script format is a
+change to that file too. Keep the two in sync.
+
+There are two things worth knowing before touching the checker or the format. `docs/format.md` is the
+one file a test reads back: it pulls out the full example scripts in it and runs the checker over each
+of them, so any example you put there must pass `check` cleanly. And the layout checks in
+`src/format/check.ts` are what let an agent fix a picture it cannot see — when you add an element or
+an action, ask whether the checker can reason about its position, and if so, give it a warning.
+
+## How a script becomes a video
+
+1. **Check.** The script is validated, and layout is estimated from the element sizes. A `math`
+   element is typeset here, by MathJax running in Node, into an SVG of glyph outlines: that gives the
+   checker the formula's exact size and its LaTeX errors, and the same SVG is later handed to the
+   browser as an image. MathJax is bundled into `dist/cli.js` and loaded only for a script that has a
+   formula.
+
+   The layout pass also runs the stroke-aware warnings: it remembers where every label is typed, and
+   the ends of every open `line` and `freedraw`. When a later stroke is added, `check` reports it if
+   the stroke's points run over an existing label, or if the two strokes' ends are within the reach of
+   their round caps but not where one continues the other. The tolerance is the combined reach of the
+   two caps, so ends that genuinely join are not flagged.
+
+2. **Speak.** Narration is split into sentences, and each is synthesized and cached, several at a time
+   when the machine has the cores for it. The browser from step 4 starts meanwhile. For the built-in
+   voice, numbers and acronyms are written out, then English words are turned into phonemes and Chinese
+   into syllables with the model's two pronunciation dictionaries. A word the English dictionary lacks
+   is built from words it has or read by spelling rules, and Chinese gets the tone changes of connected
+   speech. An `edge:` voice, the default, hands the sentence to the `edge-tts` program instead; if
+   that fails and the script named no voice, the whole script is spoken again by the built-in voice,
+   and whatever of the video was made to the first voice is made again. `--speed` changes the tempo of
+   the finished audio, not the voice.
+
+3. **Schedule.** Each `at` phrase is located in its sentence. Sentence boundaries are exact; a word's
+   position inside its sentence is estimated from syllable counts, which lands within about a quarter
+   of a second. A step is scheduled as soon as it and the steps before it are spoken: where it falls
+   depends on their audio and its own, never on what comes after. So everything up to the start of the
+   next step is settled, and steps 4 and 5 work on that much while the rest is still being spoken,
+   which is the slowest part of a first render.
+
+4. **Draw.** A headless browser loads Excalidraw. Every element has a track of animated segments, so
+   the canvas at any time is a pure function of that time; each frame is rendered with Excalidraw's
+   own export and has the pointer and captions painted on top. The first frame is the exception: in
+   place of the empty canvas at time zero it shows the cover, the canvas as the script's `cover` step
+   ends, with nothing painted on top. No frame is added, so the timing and the sound are unchanged.
+
+   A `freedraw` is drawn through its points with a smooth curve when `smooth` is left on, and with
+   straight segments when it is off, so the two read as different things: a wobble and a chart line.
+
+   The laser pointer (`point`) orbits its target. For a shape it circles the shape's own box; for a
+   line, arrow or freedraw it circles the middle of the stroke, the way a label sits on it, so the
+   pointer lands on the stroke and not on the empty space beside it.
+
+5. **Encode.** The browser's own H.264 encoder (WebCodecs) takes each frame straight from the canvas,
+   so the pictures never leave the page. The video is cut into segments of a few seconds that each
+   start with a key frame, and two encoders share them; a segment is made once all of its frames are
+   settled. The cover is a segment of one frame, made when its step has been spoken. ffmpeg copies the
+   finished H.264 into an MP4 beside the narration, which reaches it on a second pipe as it settles
+   and is encoded as AAC: 1920 x 1080 at 30 frames per second by default.
+
+   An encoder is tried before it is trusted: it is given a test card, the result is decoded again, and
+   the two are compared. Chrome's software encoder stretches a picture from the graphics card by two
+   pixels when the width is not a multiple of four, and an encoder may store colours in one range and
+   report another; neither says so. One that fails is passed over for the next (software first, then
+   whatever the machine has).
+
+   A browser with no encoder that passes (Chromium can be built without H.264) gets the slow way
+   instead, as does a render whose quick way fails partway: every frame leaves the page as a PNG and
+   ffmpeg encodes them with x264. That takes several times as long, most of it spent making PNGs.
+   `VOICEDRAW_ENCODER=ffmpeg` forces it, to compare the two or to work around a misbehaving encoder.
+
+## The token figures in the README
+
+```sh
+npm run build
+node scripts/measure-tokens.mjs examples/dns.voicedraw.json promo/promo.en.voicedraw.json
+```
+
+It counts the script as written, and the canvas at the end of the video as a minified Excalidraw
+scene, both with the `o200k_base` tokenizer. Run it again and update the README table when a listed
+script changes. The promo video states its own numbers on screen, so a change to
+`promo/promo.en.voicedraw.json` means measuring it, correcting those numbers, and rendering again.
