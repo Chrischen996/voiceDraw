@@ -13,9 +13,8 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    # the tests import the TypeScript sources directly, which needs Node's native
-    # type stripping; that is the version the project is developed on
-    node-version: 24
+    # Node 24 is set up by the step below: the tests import the TypeScript
+    # sources directly, which needs Node's native type stripping
 
     steps:
       - uses: actions/checkout@v4

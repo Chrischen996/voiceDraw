@@ -18,7 +18,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    node-version: 24
+    # Node 24 is set up by the step below: the tests import the TypeScript
+    # sources directly, which needs Node's native type stripping
 
     steps:
       - uses: actions/checkout@v4
