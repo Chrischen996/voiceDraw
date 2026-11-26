@@ -1,12 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { test } from "node:test";
 import { guess } from "../src/voice/guess.ts";
 import { normalize } from "../src/voice/normalize.ts";
 import { parseDictionary, toTokens } from "../src/voice/tokenize.ts";
-import { mixSpeakers, resolveVoice } from "../src/voice/voice.ts";
+import { resolveVoice } from "../src/voice/voice.ts";
 import { changeTempo, encodeWav, resample, trimSilence } from "../src/voice/wav.ts";
 
 // a dictionary that knows every word but these, and "pronounces" a word as itself
@@ -114,26 +111,12 @@ test("a voice is a built-in name or one of the model's speakers", async () => {
   // a voice that is named has nothing to fall back on
   assert.equal((await resolve("lin")).fallback, undefined);
   assert.equal((await resolve("edge:zh-CN-XiaoxiaoNeural")).fallback, undefined);
-  // maple is a name for the speaker af_maple; chen is zm_061 with another speaker mixed in
+  // maple is a name for the speaker af_maple; the Chinese voices are the model's speakers, left alone
   assert.equal((await resolve("maple")).key, (await resolve("af_maple")).key);
-  assert.notEqual((await resolve("chen")).key, (await resolve("zm_061")).key);
+  assert.equal((await resolve("chen")).key, (await resolve("zm_061")).key);
+  assert.equal((await resolve("lin")).key, (await resolve("zf_071")).key);
   assert.notEqual((await resolve("chen")).key, (await resolve("lin")).key);
   await assert.rejects(resolve("nobody"), /no voice called "nobody"/);
-});
-
-test("mixing speakers blends their tables and leaves the others alone", async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "voicedraw-"));
-  try {
-    const [source, target] = [path.join(dir, "voices.bin"), path.join(dir, "mixed.bin")];
-    // three speakers of two numbers each
-    writeFileSync(source, Buffer.from(Float32Array.of(0, 0, 8, 4, 100, 100).buffer));
-    await mixSpeakers(source, target, ["a", "b", "c"], { a: ["b", 0.25], b: ["a", 0.5] });
-    const out = readFileSync(target);
-    assert.deepEqual([...new Float32Array(out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength))], [2, 1, 4, 2, 100, 100]);
-    await assert.rejects(mixSpeakers(source, target, ["a", "b", "c", "d"], {}), /does not hold 4 speakers/);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
 });
 
 test("wav helpers", () => {

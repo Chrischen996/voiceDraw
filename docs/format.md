@@ -253,6 +253,12 @@ Two warnings are worth learning because they catch the things that most quietly 
   program must be installed. Without it, or without a connection, the built-in voice (`lin` or
   `maple`) says the whole script instead. Name a built-in voice to keep the narration on this
   machine.
+- The built-in Chinese voices are the model's own Mandarin speakers, left alone. An English speaker
+  mixed into one of them would make the English words a little better but bends the vowels toward an
+  English accent and flattens the tones; the Chinese comes out less natural for it, so the mix is
+  not applied. A Chinese script that names an English voice (or vice versa) is what the built-in
+  voices are worst at: it says the language of the other with an accent. `check` flags a `voice`
+  whose language does not match the narration's.
 
 ## A longer example
 

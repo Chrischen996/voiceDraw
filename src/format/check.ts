@@ -10,6 +10,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { findPhrase, tokens, widthEm } from "../shared/text.ts";
 import { DEFAULT_CANVAS, type ElementSpec, type Formula, type Script, type TextAlign, alignOffset } from "../shared/types.ts";
+import { narrationLanguage, voiceLanguage } from "../voice/voice.ts";
 
 export interface Report {
   errors: string[];
@@ -136,6 +137,21 @@ export async function check(input: unknown, baseDir: string): Promise<Report> {
   if (script.speed !== undefined && !(isNumber(script.speed) && script.speed >= 0.5 && script.speed <= 2)) fail("script", `"speed" must be between 0.5 and 2.`);
   if (script.captions !== undefined && typeof script.captions !== "boolean") fail("script", `"captions" must be true or false.`);
   if (script.voice !== undefined && typeof script.voice !== "string") fail("voice", `must be a voice name from "voicedraw voices". A voice made from a recording is no longer supported.`);
+  else if (typeof script.voice === "string") {
+    // a named voice whose language does not match the narration's will read it in the other
+    // language's accent and misread much of it; the narration goes to a voice of its own language
+    // when no voice is named
+    const narration = (Array.isArray(script.steps) ? (script.steps as unknown[]) : [])
+      .filter((s) => isObject(s) && typeof s.say === "string")
+      .map((s) => (s as Record<string, unknown>).say as string)
+      .join(" ");
+    const spoken = voiceLanguage(script.voice);
+    if (spoken && narration && narrationLanguage(narration) !== spoken) {
+      const want = narrationLanguage(narration) === "zh" ? "Chinese" : "English";
+      const have = spoken === "zh" ? "Chinese" : "English";
+      warn("voice", `${quote(script.voice)} speaks ${have}, but the narration is ${want}. It will read the ${want.toLowerCase()} in its ${have.toLowerCase()} accent and misread much of it. Leave "voice" unset so the ${want.toLowerCase()} voice is chosen, or set it to a ${want.toLowerCase()} one.`);
+    }
+  }
 
   const canvas = { ...DEFAULT_CANVAS, ...(isObject(script.canvas) ? script.canvas : {}) };
   if (script.canvas !== undefined) {

@@ -43,7 +43,9 @@ Use `npx -y voicedraw@latest` unless `voicedraw` is already installed on the PAT
 - `voicedraw voices` lists the voices. Leave `voice` unset unless the user asks for one: by default
   the narration goes to Microsoft's online voice for its language, and to the built-in voice if
   `edge-tts` or a connection is missing. If the user wants nothing sent online, set a built-in voice
-  (`lin`, `chen`, `maple`, `sol`).
+  (`lin`, `chen`, `maple`, `sol`). Match the voice to the narration's language: a Chinese script read
+  by an English voice (or the reverse) comes out accented and misread, and `check` flags a `voice`
+  that does not match the narration's language.
 - Rendering takes roughly as long as the video is. Speech is cached, so rendering again after
   changing only the drawing is faster.
 - If a command fails, read its message: it says what is missing. `voicedraw setup` downloads

@@ -70,6 +70,22 @@ test("a voice is a name", async () => {
   assert.match((await withVoice({ clip: "me.wav", transcript: "Hello." }))[0], /must be a voice name/);
 });
 
+test("a voice that speaks the wrong language for the narration is a warning", async () => {
+  const withVoice = async (voice, say) => (await check({ ...script({ say }), voice }, examples));
+  // an English voice over Chinese narration, and a Chinese one over English
+  const en = await withVoice("maple", "你好，世界。");
+  assert.match(en.warnings[0], /"maple" speaks English, but the narration is Chinese/);
+  const zh = await withVoice("lin", "Hello there.");
+  assert.match(zh.warnings[0], /"lin" speaks Chinese, but the narration is English/);
+  // a script that says nothing is drawn always warns "nothing is ever drawn"; look only at voice warnings
+  const voiceWarnings = (r) => r.warnings.filter((w) => w.startsWith("voice:"));
+  // the same language does not warn, and neither does a name that is not one of the model's voices
+  assert.deepEqual(await withVoice("lin", "你好，世界。").then(voiceWarnings), []);
+  assert.deepEqual(await withVoice("edge:fr-FR-DeniseNeural", "你好，世界。").then(voiceWarnings), []);
+  // leaving "voice" unset never warns, whatever the narration
+  assert.deepEqual((await check({ ...script({ say: "你好，世界。" }) }, examples)).warnings.filter((w) => w.startsWith("voice:")), []);
+});
+
 test("layout problems are warnings", async () => {
   const { errors, warnings } = await report({
     do: [

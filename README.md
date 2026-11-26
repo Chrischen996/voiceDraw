@@ -64,10 +64,11 @@ npx voicedraw render   my.voicedraw.json  # 合成配音并渲染 MP4
 
 默认行为:脚本不指定 `voice` 时,用旁白语言的在线语音(中文 `edge:zh-CN-XiaoxiaoNeural`,英文 `edge:en-US-EmmaMultilingualNeural`,需要本机装有 [`edge-tts`](https://github.com/rany2/edge-tts));拿不到时整个脚本退回内置语音,保证一条视频只有一个声音。
 
-- 内置语音:`lin`(女/中)、`chen`(男/中)、`maple`(英)、`sol`(英),`voicedraw voices` 可列出,也可以用模型自带名(如 `zf_001`)。
+- 内置语音:`lin`(女/中)、`chen`(男/中)、`maple`(英)、`sol`(英),`voicedraw voices` 可列出,也可以用模型自带名(如 `zf_001`)。中文音色就是模型自带的普通话说话人,不再混入英文音色:混入会让英文词更准一点,但会把元音往英语腔上拉、把声调磨平,中文反而不自然。
 - 不想发任何数据到网上:显式指定内置语音,如 `--voice lin`。
+- 旁白是中文却指定了英文语音(或反过来),`check` 会警告:那种组合念出来的另一门语言带口音、且很多词会念错。去掉 `voice` 让它按旁白语言自动选,或换成对应语言的语音。
 - 接自己的 TTS:`--tts-command "python my_tts.py"`,程序从 stdin 读一句、把 WAV 写到 `$VOICEDRAW_OUT`。
-- 已知限制:中文仅普通话;英文混在中文句子里识别率偏低;句内单词时间是估算(±0.25s),句首是精确的。
+- 已知限制:中文仅普通话;英文混在中文句子里,内置语音识别率偏低(在线语音好得多);句内单词时间是估算(±0.25s),句首是精确的。
 
 ## 让 coding agent 直接出片
 

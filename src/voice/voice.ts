@@ -9,7 +9,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -35,8 +35,6 @@ export interface Voice {
 interface BuiltIn {
   /** the model's name for the speaker */
   speaker: string;
-  /** another speaker mixed into this one, and how much of it */
-  mix?: [speaker: string, share: number];
   language: "zh" | "en";
   description: string;
 }
@@ -44,14 +42,16 @@ interface BuiltIn {
 /**
  * The voices `voicedraw voices` lists, made from the model's speakers.
  *
- * The model's Chinese speakers say English words poorly: in our tests a speech recogniser made out
- * about half of those inside a Chinese sentence. With a third of an English speaker mixed in it made out
- * about three in four, and the Chinese stayed as clear.
+ * A Chinese speaker here is the model's own speaker, left alone. Mixing an English speaker into it makes
+ * it say the English words a little better, but the mix bends its vowels toward an English accent and, on
+ * the pitch of its tones, the Chinese comes out less natural for it than a speaker left alone. The online
+ * voices say the English words inside Chinese better still, which is why a script without a `voice` goes
+ * to one of those first.
  */
 const BUILT_IN: Record<string, BuiltIn> = {
   // the first voice of each language is the one a script gets when its online voice cannot be had
-  lin: { speaker: "zf_071", mix: ["af_maple", 0.35], language: "zh", description: "Mandarin, female" },
-  chen: { speaker: "zm_061", mix: ["af_sol", 0.35], language: "zh", description: "Mandarin, male" },
+  lin: { speaker: "zf_071", language: "zh", description: "Mandarin, female" },
+  chen: { speaker: "zm_061", language: "zh", description: "Mandarin, male" },
   maple: { speaker: "af_maple", language: "en", description: "American English, female" },
   sol: { speaker: "af_sol", language: "en", description: "American English, female, lower" },
 };
@@ -85,41 +85,9 @@ async function dictionaries(model: ModelFiles): Promise<Dictionaries> {
   return { english, chinese: parseDictionary(await readFile(model.chinese, "utf8")) };
 }
 
-/**
- * Writes a copy of the model's speakers to `target` in which some are mixed with another one.
- *
- * To the model a speaker is a table of numbers, and a mix of two tables sounds like something between
- * the two speakers. `mixes` maps a speaker to the one mixed into it and that one's share.
- */
-export async function mixSpeakers(source: string, target: string, speakers: string[], mixes: Record<string, [speaker: string, share: number]>): Promise<void> {
-  const file = await readFile(source);
-  const floats = new Float32Array(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength));
-  const size = floats.length / speakers.length;
-  if (!Number.isInteger(size)) throw new Error(`${source} does not hold ${speakers.length} speakers.`);
-  const of = (speaker: string) => floats.subarray(speakers.indexOf(speaker) * size, (speakers.indexOf(speaker) + 1) * size);
-  // every mix is made from the speakers as the model has them, whatever order they are written in
-  const mixed = Object.entries(mixes).map(([speaker, [other, share]]) => {
-    const added = of(other);
-    return [speaker, of(speaker).map((v, i) => v * (1 - share) + added[i] * share)] as const;
-  });
-  for (const [speaker, table] of mixed) of(speaker).set(table);
-  // write beside the target and rename, so an interrupted write is never mistaken for the finished file
-  await writeFile(`${target}.part`, Buffer.from(floats.buffer));
-  await rename(`${target}.part`, target);
-}
-
-const MIXES: Record<string, [speaker: string, share: number]> = Object.fromEntries(Object.values(BUILT_IN).flatMap((v) => (v.mix ? [[v.speaker, v.mix]] : [])));
-
-/** The speakers file with the built-in mixes in it, made the first time it is needed. */
-async function mixedSpeakers(model: ModelFiles): Promise<string> {
-  const target = path.join(path.dirname(model.voices), `voices-${sha(JSON.stringify(MIXES))}.bin`);
-  if (!existsSync(target)) await mixSpeakers(model.voices, target, SPEAKERS, MIXES);
-  return target;
-}
-
-function kokoro(speaker: string, mix: BuiltIn["mix"], log: (line: string) => void): Voice {
+function kokoro(speaker: string, log: (line: string) => void): Voice {
   return {
-    key: sha("kokoro-v1.1", TOKENS, speaker, mix?.join(" ") ?? "", String(PACE.zh), String(PACE.en)),
+    key: sha("kokoro-v1.1", TOKENS, speaker, String(PACE.zh), String(PACE.en)),
     // One sentence does not keep the machine busy, so with cores to spare several are spoken at once,
     // by the one model. On a 22-thread laptop that halves the time (28 s to 13 s for 74 s of speech).
     // Past four there is nothing more to gain, and each sentence in flight has its own working memory.
@@ -138,7 +106,7 @@ function kokoro(speaker: string, mix: BuiltIn["mix"], log: (line: string) => voi
       const sherpa = createRequire(import.meta.url)("sherpa-onnx-node");
       const tts = new sherpa.OfflineTts({
         model: {
-          kokoro: { model: model.model, voices: mix ? await mixedSpeakers(model) : model.voices, tokens: model.tokens },
+          kokoro: { model: model.model, voices: model.voices, tokens: model.tokens },
           // more than eight makes it slower, not faster: 16 took twice as long as 8 on a 22-thread laptop
           numThreads: Math.max(1, Math.min(8, os.availableParallelism() - 1)),
           provider: "cpu",
@@ -213,6 +181,25 @@ export interface VoiceOptions {
 // each sentence is a request of its own to the service, and nearly all of its second is spent waiting
 const edgeVoice = (name: string): Voice => ({ key: sha("edge", name), open: () => openEdgeVoice(name), parallel: 6 });
 
+/** The language of the whole narration, as a voice is chosen by it: Chinese if it has any Chinese at all. */
+export const narrationLanguage = (text: string): "zh" | "en" => (isCjk(text) ? "zh" : "en");
+
+/**
+ * The language a voice spec speaks in, or `null` when it is not a name this machine can resolve to a
+ * language (an `edge-tts` name from another locale, or a speaker this model does not ship).
+ */
+export function voiceLanguage(spec: string): "zh" | "en" | null {
+  if (spec.startsWith(EDGE_PREFIX)) {
+    // `zh-CN-XiaoxiaoNeural`, `en-US-EmmaMultilingualNeural`: the two letters after the colon
+    const code = spec.slice(EDGE_PREFIX.length).slice(0, 2).toLowerCase();
+    return code === "zh" ? "zh" : code === "en" ? "en" : null;
+  }
+  const builtIn = BUILT_IN[spec];
+  if (builtIn) return builtIn.language;
+  if (!SPEAKERS.includes(spec)) return null;
+  return spec.startsWith("zf_") || spec.startsWith("zm_") ? "zh" : "en";
+}
+
 /**
  * Left unset, a script gets the first online voice of its language, and the first built-in one if the
  * online voice cannot speak. A voice the script names is used as it is, with nothing to fall back on.
@@ -234,5 +221,5 @@ export async function resolveVoice(o: VoiceOptions): Promise<Voice> {
   // a built-in voice, or one of the model's speakers by its own name
   const voice = BUILT_IN[name] ?? (SPEAKERS.includes(name) ? { speaker: name } : undefined);
   if (!voice) throw new Error(`There is no voice called "${name}". Built-in voices: ${Object.keys(BUILT_IN).join(", ")}. Online voices start with "${EDGE_PREFIX}".`);
-  return kokoro(voice.speaker, voice.mix, o.log);
+  return kokoro(voice.speaker, o.log);
 }
