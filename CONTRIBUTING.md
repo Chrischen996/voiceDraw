@@ -110,6 +110,6 @@ git push && git push --tags
 ```
 
 The workflow checks the tag matches `package.json`, runs the full test suite, and publishes. It reads
-the npm credentials from the `NPM_TOKEN` repository secret (Settings -> Secrets and variables ->
+the npm credentials from the `NPMPUBLISH` repository secret (Settings -> Secrets and variables ->
 Actions); set it once with an npm automation token. An npm version, once published, cannot be
 replaced, so bump the version before tagging.

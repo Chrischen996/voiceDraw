@@ -93,7 +93,7 @@ npm install && npm run build && npm test   # 55 个单元测试, 覆盖 check/�
 
 - 架构:画布是"时间的纯函数"——每个元素一条动画轨道,任意时刻可单独出帧;配音按步落定,画帧与编码并行进行,总耗时约等于视频时长。
 - 编码优先用浏览器 WebCodecs 的 H.264(出片前会自检:试编、回解、逐像素比对),不通过时退回"PNG 帧 + ffmpeg x264"慢路径;`VOICEDRAW_ENCODER=ffmpeg` 可强制慢路径。
-- CI(`.github/workflows/`):`test.yml` 每次 push 跑全量测试;`publish.yml` 在推 `v*` tag 时自动发 npm(需要仓库 Secret `NPM_TOKEN`)。发版流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- CI(`.github/workflows/`):`test.yml` 每次 push 跑全量测试;`publish.yml` 在推 `v*` tag 时自动发 npm(需要仓库 Secret `NPMPUBLISH`)。发版流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 - 产物:CLI 是 esbuild 打的单文件 `dist/cli.js`(Node 端),播放页 `dist/player/` 打进 Excalidraw、MathJax、Excalifont 字体。
 
 ## 许可

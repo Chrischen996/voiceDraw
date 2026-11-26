@@ -1,8 +1,8 @@
 # Publishes to npm when a version tag is pushed.
 #
-# Setup (one time): add the NPM_TOKEN secret to the repository:
+# Setup (one time): add the NPMPUBLISH secret to the repository:
 #   Settings -> Secrets and variables -> Actions -> New repository secret
-#   name: NPM_TOKEN, value: an npm automation token (npm_lpz... style)
+#   name: NPMPUBLISH, value: an npm automation token (npm_lpz... style)
 #
 # Publishing a new version:
 #   npm version patch|minor|major   # bumps package.json + the lockfile, makes a git tag
@@ -55,4 +55,4 @@ jobs:
       - name: Publish to npm
         run: npm publish --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPMPUBLISH }}
