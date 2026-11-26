@@ -28,7 +28,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry: npm
 
       # the tag must name the version that is actually in package.json,
       # otherwise the npm registry would get a mismatched release
