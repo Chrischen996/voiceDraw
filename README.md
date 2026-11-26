@@ -127,8 +127,14 @@ agent. Any agent that can run a shell command can make a video:
 - **An agent that reads skills:** `npx skills add Chrischen996/voiceDraw` installs the skill for the
   agents it finds, in this project, or for every project with `-g`. `-a <agent>` picks the agents.
   This is the command the prompt under [Install](#install) has the agent run for you.
-- **Claude Code, as a plugin:** this repository is also a plugin, so its `skills` folder is picked
-  up when the repository is installed as one.
+- **Claude Code, as a plugin:** this repository is a marketplace of one plugin. In Claude Code:
+
+  ```
+  /plugin marketplace add Chrischen996/voiceDraw
+  /plugin install voicedraw
+  ```
+
+  Its `skills` folder is picked up when the plugin is installed.
 - **Any other agent:** tell it to run `npx -y voicedraw@latest guide` and make a video of what you
   want explained.
 

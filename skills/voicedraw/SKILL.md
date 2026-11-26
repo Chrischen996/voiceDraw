@@ -11,8 +11,8 @@ tie it to. You write the script; the `voicedraw` command checks it and renders i
 
 ## Running the command
 
-Use `voicedraw` if it is on the PATH, otherwise `npx -y voicedraw@latest`. It needs Node.js 20 or
-newer. The first render downloads a speech model (about 365 MB), which can take a few minutes.
+Use `npx -y voicedraw@latest` unless `voicedraw` is already installed on the PATH. It needs Node.js
+20 or newer. The first render downloads a speech model (about 365 MB), which can take a few minutes.
 
 ## Steps
 

@@ -1,0 +1,57 @@
+# Publishes to npm when a version tag is pushed.
+#
+# Setup (one time): add the NPM_TOKEN secret to the repository:
+#   Settings -> Secrets and variables -> Actions -> New repository secret
+#   name: NPM_TOKEN, value: an npm automation token (npm_lpz... style)
+#
+# Publishing a new version:
+#   npm version patch|minor|major   # bumps package.json + the lockfile, makes a git tag
+#   git push && git push --tags      # this workflow runs on the tag and publishes
+
+name: publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    node-version: 24
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry: npm
+
+      # the tag must name the version that is actually in package.json,
+      # otherwise the npm registry would get a mismatched release
+      - name: Check tag matches package.json
+        run: |
+          pkg_version="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF#refs/tags/}"
+          tag="${tag#v}"
+          if [ "$pkg_version" != "$tag" ]; then
+            echo "tag v$tag does not match package.json version $pkg_version"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      # prepack builds dist/ into the tarball before it is packed
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

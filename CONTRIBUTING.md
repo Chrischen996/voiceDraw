@@ -99,3 +99,17 @@ It counts the script as written, and the canvas at the end of the video as a min
 scene, both with the `o200k_base` tokenizer. Run it again and update the README table when a listed
 script changes. The promo video states its own numbers on screen, so a change to
 `promo/promo.en.voicedraw.json` means measuring it, correcting those numbers, and rendering again.
+
+## Releasing
+
+Releases are published to npm by the `publish` workflow, which runs on version tags:
+
+```sh
+npm version patch      # 0.1.0 -> 0.1.1, or use minor / major; updates package.json and the lockfile
+git push && git push --tags
+```
+
+The workflow checks the tag matches `package.json`, runs the full test suite, and publishes. It reads
+the npm credentials from the `NPM_TOKEN` repository secret (Settings -> Secrets and variables ->
+Actions); set it once with an npm automation token. An npm version, once published, cannot be
+replaced, so bump the version before tagging.

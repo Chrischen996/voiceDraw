@@ -1,0 +1,13 @@
+{
+  "name": "voicedraw",
+  "owner": {
+    "name": "Chrischen996"
+  },
+  "plugins": [
+    {
+      "name": "voicedraw",
+      "source": ".",
+      "description": "Make a narrated whiteboard video (MP4): an Excalidraw diagram drawn step by step while a voice explains it. The skill teaches any coding agent to write, check, and render voicedraw scripts with the voicedraw npm CLI."
+    }
+  ]
+}

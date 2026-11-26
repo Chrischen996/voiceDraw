@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.mp4
 *.tgz
+# npm auth tokens never go into the repo
+.npmrc
