@@ -1,6 +1,6 @@
 {
   "name": "voicedraw",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Turn a narrated Excalidraw script into a video. Local text-to-speech, no screen recording.",
   "license": "MIT",
   "repository": {
