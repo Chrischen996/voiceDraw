@@ -1,226 +1,101 @@
 # voiceDraw
 
-Narrated whiteboard videos from a text file. You describe what to draw on an
-[Excalidraw](https://excalidraw.com) canvas and what to say; voiceDraw speaks the narration, draws
-each element as its words are spoken, and writes an MP4.
+把一段"边说边画"的白板视频,交给一个 JSON 文件来描述。
+
+你写一个脚本:说什么(`say`),在说到哪个词时画什么(`at` + `add`/`update`/...);voiceDraw 负责把旁白合成语音、按词触发 Excalidraw 画布上的每一笔,最后输出一个带配音的 MP4。全程本地渲染,不录屏。
 
 ```json
-{
-  "voicedraw": 1,
-  "steps": [
-    {
-      "say": "Take a client and a server. Every page load begins with a request from one to the other.",
-      "do": [
-        { "at": "client", "add": { "id": "client", "type": "rectangle", "x": 140, "y": 280, "width": 220, "height": 110, "label": "Client" } },
-        { "at": "server", "add": { "id": "server", "type": "rectangle", "x": 900, "y": 280, "width": 220, "height": 110, "label": "Server" } },
-        { "at": "request", "add": { "id": "request", "type": "arrow", "from": "client", "to": "server", "label": "GET /" } }
-      ]
-    }
+{ "voicedraw": 1, "steps": [ {
+  "say": "Take a client and a server. Every page load begins with a request from one to the other.",
+  "do": [
+    { "at": "client", "add": { "id": "client", "type": "rectangle", "x": 140, "y": 280, "width": 220, "height": 110, "label": "Client" } },
+    { "at": "server", "add": { "id": "server", "type": "rectangle", "x": 900, "y": 280, "width": 220, "height": 110, "label": "Server" } },
+    { "at": "request", "add": { "id": "request", "type": "arrow", "from": "client", "to": "server", "label": "GET /" } }
   ]
-}
+} ] }
 ```
 
 ```sh
-npx voicedraw render hello.voicedraw.json     # writes hello.mp4
+npx voicedraw render dns.voicedraw.json   # 得到 dns.mp4
 ```
 
-The format is meant to be written by a coding agent as much as by a person. The goal is to make an
-agent's explanations quicker to take in: a model writes faster than anyone can read, so let it draw
-and talk instead.
+## 三十秒上手
 
-## Install
+```sh
+npx -y voicedraw@latest guide      # 完整的脚本格式参考(带例子)
+npx voicedraw check  my.voicedraw.json    # 只查错, 不出片
+npx voicedraw snapshot my.voicedraw.json  # 出一张 PNG 看布局
+npx voicedraw render   my.voicedraw.json  # 合成配音并渲染 MP4
+```
 
-You do not run voiceDraw yourself; your coding agent does. So the way to install it is to ask the
-agent. Paste this into Claude Code, Codex, Cursor, Gemini CLI or any other agent that can run a shell
-command:
+前几次渲染会自动下载 ~365MB 的语音模型(Kokoro,本地 CPU 运行)和一个 headless Chrome;`voicedraw setup` 可以提前把它们下好并逐项报告。环境要求:Node.js 20+、任何 Chromium 系浏览器(装了 Chrome/Edge 就用)。
+
+## 五个示例,直接照着改
+
+[examples/](examples/) 里有五个完整脚本,从 16 秒到 25 秒不等,覆盖了最常用的画法:
+
+| 示例 | 内容 | 值得看的点 |
+|---|---|---|
+| [cache](examples/cache.voicedraw.json) | 缓存如何减少数据库查询 | `remove` + `camera: fit` 的组合 |
+| [dns](examples/dns.voicedraw.json) | 浏览器输入 URL 之后发生了什么 | 箭头 `via` 绕行、`update` 改标题 |
+| [binary-search](examples/binary-search.voicedraw.json) | 二分查找的过程动画 | 同一步里多个 `at` 依次触发 |
+| [pythagoras](examples/pythagoras.voicedraw.json) | 勾股定理推导 | `math` 元素排版 LaTeX |
+| [gaussian-integral](examples/gaussian-integral.voicedraw.json) | 高斯积分 | 公式一步步 `update` 替换 |
+
+跑 `npx voicedraw check <示例路径>` 可以随时验证它们当前无错。
+
+## 脚本格式(要点)
+
+完整文档以 `voicedraw guide` 的输出为准([docs/format.md](docs/format.md)),这里只列骨架:
+
+- **顶层**:`voicedraw: 1`、`steps`、可选 `title` / `canvas` / `voice` / `speed` / `captions` / `cover`。画布默认 1280×720,输出默认 1920×1080、30fps。
+- **step**:`say`(旁白)+ `do`(动作列表)+ 可选 `pause`。一步讲一个意思。
+- **动作**:`add` / `update` / `remove` / `camera` / `point`,每个动作用 `at` 绑定到旁白的一个词或短语(句首精确,句中误差约 0.25 秒),或直接用秒数。
+- **元素**:`rectangle` `ellipse` `diamond` `text` `math` `arrow` `line` `freedraw` `image`,属性名沿用 Excalidraw。
+
+几个容易踩的点:
+
+- **折线要直就写 `"smooth": false`**。`line`/`freedraw` 默认把控制点连成平滑曲线(适合签名、手绘);画数据折线(价格、轨迹)时关掉它,不然 V 形跌回升会被拉成 S。
+- **公式用 `math` 元素**(`"tex": "\\frac{a}{b}"`,反斜杠要写两遍),旁白里念不出来就写成文字("x 的平方"),画面里再排版。
+- **视频第一帧是封面**(默认取第 1 步结束时的画面),信息流截图不会看到空画布;`"cover": 3` 可换,`"cover": false` 关掉。
+- `check` 除了查引用和重叠,还会报两条最毁画面的布局问题:**笔画穿过已有标签**、**两条开放笔画端点接近却没接上**(容差按圆头半径算,真接上了不报)。
+
+## 配音
+
+默认行为:脚本不指定 `voice` 时,用旁白语言的在线语音(中文 `edge:zh-CN-XiaoxiaoNeural`,英文 `edge:en-US-EmmaMultilingualNeural`,需要本机装有 [`edge-tts`](https://github.com/rany2/edge-tts));拿不到时整个脚本退回内置语音,保证一条视频只有一个声音。
+
+- 内置语音:`lin`(女/中)、`chen`(男/中)、`maple`(英)、`sol`(英),`voicedraw voices` 可列出,也可以用模型自带名(如 `zf_001`)。
+- 不想发任何数据到网上:显式指定内置语音,如 `--voice lin`。
+- 接自己的 TTS:`--tts-command "python my_tts.py"`,程序从 stdin 读一句、把 WAV 写到 `$VOICEDRAW_OUT`。
+- 已知限制:中文仅普通话;英文混在中文句子里识别率偏低;句内单词时间是估算(±0.25s),句首是精确的。
+
+## 让 coding agent 直接出片
+
+这个仓库同时是一个 agent skill,所以最常见的用法不是自己敲命令,而是对 agent 说一句:
 
 ```text
-Install the voicedraw skill with `npx skills add Chrischen996/voiceDraw -g -y`, then make me a video
-explaining how DNS works.
+Install the voicedraw skill with `npx skills add Chrischen996/voiceDraw -g -y`,
+then make me a video explaining how DNS works.
 ```
 
-It needs Node.js 20 or newer.
+skill([skills/voicedraw/SKILL.md](skills/voicedraw/SKILL.md))只写流程(读 guide → 写脚本 → check → snapshot → render),格式细节始终从已安装的 CLI 里取,CLI 升级格式时 skill 自动跟手。Claude Code 用户也可以用 plugin 方式安装:
 
-To try it once without installing anything:
-
-```text
-Run `npx -y voicedraw@latest guide`, then make me a video explaining how DNS works.
+```
+/plugin marketplace add Chrischen996/voiceDraw
+/plugin install voicedraw
 ```
 
-### By hand
-
-The command also works on its own:
+## 开发者
 
 ```sh
-npm install -g voicedraw
-voicedraw setup        # optional: download the speech model now instead of on the first render
+npm install && npm run build && npm test   # 55 个单元测试, 覆盖 check/配音流水线/H.264 分段/token 计数
 ```
 
-Rendering uses three things, and `voicedraw setup` reports on each:
+- 架构:画布是"时间的纯函数"——每个元素一条动画轨道,任意时刻可单独出帧;配音按步落定,画帧与编码并行进行,总耗时约等于视频时长。
+- 编码优先用浏览器 WebCodecs 的 H.264(出片前会自检:试编、回解、逐像素比对),不通过时退回"PNG 帧 + ffmpeg x264"慢路径;`VOICEDRAW_ENCODER=ffmpeg` 可强制慢路径。
+- CI(`.github/workflows/`):`test.yml` 每次 push 跑全量测试;`publish.yml` 在推 `v*` tag 时自动发 npm(需要仓库 Secret `NPM_TOKEN`)。发版流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- 产物:CLI 是 esbuild 打的单文件 `dist/cli.js`(Node 端),播放页 `dist/player/` 打进 Excalidraw、MathJax、Excalifont 字体。
 
-- **A speech model**, about 365 MB, downloaded on first use to a cache folder.
-- **A Chromium-family browser** to draw the frames and encode the video. An installed Chrome,
-  Chromium or Edge is used; if there is none, a headless Chrome is downloaded. A browser built
-  without an H.264 encoder still works, several times more slowly.
-- **ffmpeg**, to put picture and sound in one file. It comes with the `ffmpeg-static` dependency. If
-  your npm is set to skip install scripts, install ffmpeg yourself or point `VOICEDRAW_FFMPEG` at one.
+## 许可
 
-Drawing and encoding happen locally. Speech does too, except for one thing: when
-[`edge-tts`](#online-voices) is installed and a script does not name a voice, the narration goes to
-Microsoft's online voice. Name a built-in voice (`--voice lin`) to keep it all on your machine.
-
-## Use
-
-```
-voicedraw guide                 the script format, with examples
-voicedraw check <script>        errors and layout warnings, without rendering
-voicedraw snapshot <script>     one moment of the canvas as a PNG (--step 2, --at 12.5)
-voicedraw render <script>       the MP4 (-o out.mp4, --voice lin, --speed 1.1, --no-captions)
-voicedraw voices                the voices
-```
-
-`voicedraw guide` prints the full reference, which is also in [`docs/format.md`](docs/format.md). In
-short: a script is a list of steps, each with narration (`say`) and actions (`do`). An action adds,
-updates or removes an Excalidraw element, moves the camera, or points at something, and its `at` names
-the phrase of the narration it starts on. The renderer finds when the voice reaches that phrase: the
-start of a sentence exactly, a word inside a sentence to within about a quarter of a second.
-
-The first frame of the video is a cover, the canvas as step 1 ends, so a feed that takes its
-thumbnail from that frame does not show an empty canvas. `"cover": 3` in the script picks another
-step and `"cover": false` leaves the cover out.
-
-Besides Excalidraw's shapes, text, arrows and images there is a `math` element, which typesets a
-formula from LaTeX: `{ "type": "math", "tex": "\\frac{n(n+1)}{2}" }`. It is written out as it
-appears, and an update can replace it with the next line of a derivation.
-
-**Chart lines stay straight.** A `freedraw` element is a pen stroke: by default its points are
-smoothed into a curve, which is right for handwriting and signatures. When the points are data — a
-price line, a trajectory, anything with corners — set `"smooth": false` and the segments stay
-straight:
-
-```json
-{ "id": "price", "type": "freedraw", "smooth": false,
-  "points": [[140, 80], [300, 200], [420, 250], [500, 330]] }
-```
-
-`check` exists because whoever writes a script usually cannot see it. It catches references to
-elements that are not there, phrases the narration never says, shapes that half overlap, labels that
-will not fit and drawings hidden under the captions. Two of its warnings catch the things that most
-often ruin a picture quietly:
-
-- **A stroke that crosses a label.** A `line` or `freedraw` whose points run over an existing label
-  hides the text; `check` names both sides of it, so the author knows to move the label, the
-  stroke, or the order of the two.
-- **Strokes that almost join.** Two open strokes whose ends sit close together, but not where one
-  should continue the other, read as a broken line. `check` prints the ends of both and says which
-  one to move; ends that actually meet are left alone.
-
-`snapshot` renders a still in a second or two, with no speech, to look at the layout before
-rendering the video.
-
-## With an agent
-
-voiceDraw is a command-line program, and its skill is one Markdown file of instructions:
-[`skills/voicedraw/SKILL.md`](skills/voicedraw/SKILL.md). Nothing in either is specific to one
-agent. Any agent that can run a shell command can make a video:
-
-- **An agent that reads skills:** `npx skills add Chrischen996/voiceDraw` installs the skill for the
-  agents it finds, in this project, or for every project with `-g`. `-a <agent>` picks the agents.
-  This is the command the prompt under [Install](#install) has the agent run for you.
-- **Claude Code, as a plugin:** this repository is a marketplace of one plugin. In Claude Code:
-
-  ```
-  /plugin marketplace add Chrischen996/voiceDraw
-  /plugin install voicedraw
-  ```
-
-  Its `skills` folder is picked up when the plugin is installed.
-- **Any other agent:** tell it to run `npx -y voicedraw@latest guide` and make a video of what you
-  want explained.
-
-The skill only says what to run: read `voicedraw guide`, write a script, `check`, `snapshot`,
-`render`. The format reference lives in the command, so the skill does not go out of date with it.
-
-## What it costs in tokens
-
-A script says what to draw and leaves how to the renderer, so there is little of it to write.
-
-| Script | Video | The script |
-| --- | --- | --- |
-| [`examples/cache.voicedraw.json`](examples/cache.voicedraw.json) | 16 s | 549 tokens |
-| [`examples/dns.voicedraw.json`](examples/dns.voicedraw.json) | 23 s | 716 tokens |
-| [`examples/binary-search.voicedraw.json`](examples/binary-search.voicedraw.json) | 25 s | 685 tokens |
-
-What an agent reads first does not grow with the video: the skill is a few hundred tokens and
-`voicedraw guide` about 4,100. Layout problems come back from `check` as text, so finding them costs
-no screenshots, and one `snapshot` is usually enough to look at before rendering.
-
-## Voices
-
-Left unset, a script is narrated by an [online voice](#online-voices) for the language of its
-narration: `edge:zh-CN-XiaoxiaoNeural` for Chinese and `edge:en-US-EmmaMultilingualNeural` for
-English. If that cannot be had (no `edge-tts`, no connection), the built-in voice says the whole
-script instead, so one video never has two voices in it. A voice the script or `--voice` names is
-used as it is, with no fallback.
-
-The built-in voice is a small Kokoro speech model run on the CPU by sherpa-onnx. It speaks Mandarin
-and English several times faster than real time on a laptop, and the model is Apache-2.0 licensed.
-
-`voicedraw voices` lists four built-in voices: `lin` (female) and `chen` (male) for Chinese, `maple`
-and `sol` for English. A script can also ask for any speaker by the model's own name for it, such as
-`"voice": "zf_001"`.
-
-### Online voices
-
-The built-in voice is good and not great. Microsoft's online neural voices, the ones behind Read
-Aloud in Edge, sound closer to a person, so they are the default. A script can also name one:
-
-```json
-{ "voicedraw": 1, "voice": "edge:en-US-AvaMultilingualNeural", "steps": [] }
-```
-
-or `voicedraw render talk.voicedraw.json --voice edge:zh-CN-YunxiNeural`. `voicedraw voices` lists a
-few, and `edge-tts --list-voices` has them all. They work differently from the built-in voice:
-
-- They need the [`edge-tts`](https://github.com/rany2/edge-tts) program (`pipx install edge-tts` or
-  `uv tool install edge-tts`) and a connection. Without them, a script that names no voice falls back
-  to the built-in one.
-- The narration is sent to Microsoft. The built-in voice sends nothing anywhere.
-- Microsoft runs this service for its browser and does not offer it as an API, so it can change or
-  stop without notice, and it comes with no licence to use the voices elsewhere. For something you
-  depend on, use the built-in voice or `--tts-command` with a service you have an agreement with.
-
-### Another engine
-
-To use another speech engine altogether, pass `--tts-command`. The command is run once per sentence,
-gets the sentence on stdin, and must write a WAV file to the path in `$VOICEDRAW_OUT`:
-
-```sh
-voicedraw render talk.voicedraw.json --tts-command "python my_tts.py"
-```
-
-## Limits
-
-- Chinese means Mandarin. Other languages are not supported by the built-in voice.
-- The built-in voice's English dictionary has about 178,000 words. An unknown word is assembled from
-  known ones or read by spelling rules, which is sometimes wrong for names. Respell a name the way it
-  sounds if it comes out badly.
-- English words inside a Chinese sentence are less reliable than either language alone.
-- A word's time inside its sentence is an estimate, good to about a quarter of a second. Sentence
-  starts are exact.
-- There is no audio besides the narration.
-
-## Credits and licenses
-
-voiceDraw is MIT licensed. How it works inside, and how to build and test it, is in
-[CONTRIBUTING.md](CONTRIBUTING.md). It builds on:
-
-- [Excalidraw](https://github.com/excalidraw/excalidraw) (MIT), bundled into the player with its fonts.
-- [MathJax](https://github.com/mathjax/MathJax-src) (Apache-2.0), bundled into the command with its
-  TeX font, which typesets the formulas.
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0), which runs the speech model.
-- [Kokoro v1.1](https://huggingface.co/hexgrad/Kokoro-82M-v1.1-zh) (Apache-2.0), the speech model,
-  downloaded at run time in sherpa-onnx's packaging of it. The pronunciation dictionaries that come
-  with it are from misaki (Apache-2.0).
-- ffmpeg, through [`ffmpeg-static`](https://github.com/eugeneware/ffmpeg-static), which downloads a
-  GPL build and runs it as a separate program.
+MIT。依赖:Excalidraw(MIT)、MathJax(Apache-2.0)、sherpa-onnx(Apache-2.0)、Kokoro v1.1(Apache-2.0)、ffmpeg-static(GPL,独立进程运行)。
