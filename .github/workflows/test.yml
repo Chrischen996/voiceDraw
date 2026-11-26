@@ -1,0 +1,43 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# one running job at a time per ref; newer pushes cancel the older one
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # the tests import the TypeScript sources directly, which needs Node's native
+    # type stripping; that is the version the project is developed on
+    node-version: 24
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # install exactly what the lockfile pins. ffmpeg-static's install script
+      # downloads a binary; the unit tests do not run it, so a missing binary
+      # would not matter, but the download succeeds on GitHub runners anyway
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      # 55 unit tests: the checker, the narration and telling pipeline, the
+      # H.264/segment math, and the token counts of the example scripts
+      - name: Run tests
+        run: npm test
+
+      - name: Build the CLI and player
+        run: npm run build
